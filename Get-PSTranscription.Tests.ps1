@@ -3,7 +3,6 @@ $servers = @("Server1", "Server2", "Server3")  # Replace with actual server name
 
 # Define registry path and values
 $RegistryPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription"
-$RegistryKeys = @("EnableTranscripting", "EnableInvocationHeader", "OutputDirectory")
 
 # Import Pester module
 if (-not (Get-Module -ListAvailable -Name Pester)) {
