@@ -1,16 +1,15 @@
-# PowerShell Tool for Installing Programs and Managing Groups with GUI
 param (
     [switch]$Unattended
 )
 
-Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName PresentationFramework
 
 # Set paths
 $AdminToolsPath = "C:\Temp\AdminTools"
 $InstallFilesPath = "$AdminToolsPath\InstallFiles"
 
 if (-Not (Test-Path $InstallFilesPath) -or -Not (Get-ChildItem -Path $InstallFilesPath -Filter "*.exe","*.msi")) {
-    [System.Windows.Forms.MessageBox]::Show("No install files found in $InstallFilesPath. The script will continue, but no software will be installed.", "Warning", "OK", "Warning")
+    [System.Windows.MessageBox]::Show("No install files found in $InstallFilesPath. The script will continue, but no software will be installed.", "Warning", "OK", "Warning")
     $SoftwareList = @()
 } else {
     $SoftwareFiles = Get-ChildItem -Path $InstallFilesPath -Filter "*.exe","*.msi" | Select-Object -ExpandProperty Name
@@ -39,7 +38,7 @@ function Get-ADUserInfo {
         }
     } catch {
         "Error retrieving user information.", "Unable to access Active Directory." | Write-Warning
-        exit
+        return
     }
 }
 
@@ -73,107 +72,105 @@ function Add-ToDomainGroups {
     }
 }
 
-# GUI Function
-function Show-GUI {
-    $form = New-Object System.Windows.Forms.Form
-    $form.Text = "New Admin Setup on $ComputerName"
-    $form.Size = New-Object System.Drawing.Size(600,500)
-    $form.StartPosition = "CenterScreen"
-    
-    $label = New-Object System.Windows.Forms.Label
-    $label.Text = "Find User:"
-    $label.Location = New-Object System.Drawing.Point(20,20)
-    $label.Size = New-Object System.Drawing.Size(150,20)
-    $form.Controls.Add($label)
-    
-    $textbox = New-Object System.Windows.Forms.TextBox
-    $textbox.Location = New-Object System.Drawing.Point(180,20)
-    $textbox.Size = New-Object System.Drawing.Size(200,20)
-    $form.Controls.Add($textbox)
-    
-    $lookupButton = New-Object System.Windows.Forms.Button
-    $lookupButton.Text = "Lookup"
-    $lookupButton.Location = New-Object System.Drawing.Point(400, 18)
-    $lookupButton.Add_Click({
-        $userInfo = Get-ADUserInfo -UserName $textbox.Text
-        [System.Windows.Forms.MessageBox]::Show($userInfo, "User Info", "OK", "Information")
-    })
-    $form.Controls.Add($lookupButton)
-    
-    $groupLabel = New-Object System.Windows.Forms.Label
-    $groupLabel.Text = "Select AD Groups:"
-    $groupLabel.Location = New-Object System.Drawing.Point(20,60)
-    $groupLabel.Size = New-Object System.Drawing.Size(150,20)
-    $form.Controls.Add($groupLabel)
-    
-    $groupCheckboxes = @()
-    $yOffset = 90
-    foreach ($Group in $DomainGroups) {
-        $checkbox = New-Object System.Windows.Forms.CheckBox
-        $checkbox.Text = $Group
-        $checkbox.Location = New-Object System.Drawing.Point(20, $yOffset)
-        $checkbox.AutoSize = $true
-        $form.Controls.Add($checkbox)
-        $groupCheckboxes += $checkbox
-        $yOffset += 30
-    }
-    
-    $softwareLabel = New-Object System.Windows.Forms.Label
-    $softwareLabel.Text = "Select Software to Install:"
-    $softwareLabel.Location = New-Object System.Drawing.Point(300,60)
-    $softwareLabel.Size = New-Object System.Drawing.Size(200,20)
-    $form.Controls.Add($softwareLabel)
-    
-    $softwareCheckboxes = @()
-    $yOffsetSoftware = 90
-    foreach ($Software in $SoftwareList) {
-        $checkbox = New-Object System.Windows.Forms.CheckBox
-        $checkbox.Text = $Software.Name
-        $checkbox.Location = New-Object System.Drawing.Point(300, $yOffsetSoftware)
-        $checkbox.AutoSize = $true
-        $form.Controls.Add($checkbox)
-        $softwareCheckboxes += $checkbox
-        $yOffsetSoftware += 30
-    }
-    
-    # Adjust button position based on the longest column
-    $finalYOffset = [Math]::Max($yOffset, $yOffsetSoftware) + 20
-    
-    $installButton = New-Object System.Windows.Forms.Button
-    $installButton.Text = "Install Selected Software"
-    $installButton.AutoSize = $true
-    $installButton.Location = New-Object System.Drawing.Point(300, $finalYOffset)
-    $installButton.Add_Click({
-        foreach ($checkbox in $softwareCheckboxes) {
-            if ($checkbox.Checked) {
-                $softwareItem = $SoftwareList | Where-Object { $_.Name -eq $checkbox.Text }
-                Install-Software -Name $softwareItem.Name -Installer $softwareItem.Installer -Arguments $softwareItem.Arguments
-            }
-        }
-    })
-    $form.Controls.Add($installButton)
-    
-    $groupButton = New-Object System.Windows.Forms.Button
-    $groupButton.Text = "Add to Selected Groups"
-    $groupButton.AutoSize = $true
-    $groupButton.Location = New-Object System.Drawing.Point(20, $finalYOffset)
-    $groupButton.Add_Click({
-        $selectedGroups = @()
-        foreach ($checkbox in $groupCheckboxes) {
-            if ($checkbox.Checked) {
-                $selectedGroups += $checkbox.Text
-            }
-        }
-        Add-ToDomainGroups -User $textbox.Text -Groups $selectedGroups
-    })
-    $form.Controls.Add($groupButton)
-    
-    $form.ShowDialog()
+# XAML for GUI
+$inputXML = @"
+<Window x:Class="AdminSetup.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New Admin Setup on $ComputerName" Height="310" Width="635">
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Label Grid.Row="0" Grid.Column="0" Content="Find User:" Width="75" Height="25" Margin="0,0,232,5" />
+        <TextBox Grid.Row="0" x:Name="txtUserName" Margin="70,0,90,5" Height="25" Width="400"  Grid.ColumnSpan="2" />
+        <Button Grid.Row="0" Grid.Column="1" Content="Lookup" x:Name="btnLookup" Height="25" Width="75" Margin="205,0,10,5" />
+
+        <Label Grid.Row="1" Grid.Column="0" Content="Select AD Groups:" />
+        <StackPanel Grid.Row="1" Grid.Column="0" x:Name="spGroups" Orientation="Vertical" Margin="0,0,0,216" />
+        <StackPanel Grid.Row="2" Grid.Column="0" x:Name="spGroupNames" Orientation="Vertical" Margin="0,28,0,36" />
+
+        <Label Grid.Row="1" Grid.Column="1" Content="Select Software to Install:" />
+        <StackPanel Grid.Row="1" Grid.Column="1" x:Name="spSoftware" Orientation="Vertical" Margin="0,0,0,216" />
+        <StackPanel Grid.Row="2" Grid.Column="1" x:Name="spSoftwareTitles" Orientation="Vertical" Margin="0,28,0,36" />
+
+        <Button Grid.Row="1" Grid.Column="0" Content="Add to Selected Groups" x:Name="btnAddGroups" Width="150" Height="24" VerticalAlignment="Bottom" HorizontalAlignment="Center" />
+        <Button Grid.Row="1" Grid.Column="1" Content="Install Selected Software" x:Name="btnInstallSoftware" Width="150" Height="24" VerticalAlignment="Bottom" HorizontalAlignment="Center" />
+    </Grid>
+</Window>
+"@
+
+$inputXML = $inputXML -replace 'mc:Ignorable="d"','' -replace "x:N",'N' -replace '^<Win.*', '<Window'
+[xml]$XAML = $inputXML
+$reader = (New-Object System.Xml.XmlNodeReader $XAML)
+try {
+    $Form = [Windows.Markup.XamlReader]::Load($reader)
+} catch {
+    Write-Warning "Unable to parse XML, with error: $($Error[0])`n Ensure that there are NO SelectionChanged or TextChanged properties in your textboxes (PowerShell cannot process them)"
+    throw
 }
+
+# Load XAML Objects In PowerShell
+$XAML.SelectNodes("//*[@Name]") | ForEach-Object {
+    try {
+        Set-Variable -Name "WPF$($_.Name)" -Value $Form.FindName($_.Name) -ErrorAction Stop
+    } catch {
+        throw
+    }
+}
+
+# Populate Group Checkboxes
+foreach ($Group in $DomainGroups) {
+    $checkbox = New-Object Windows.Controls.CheckBox
+    $checkbox.Content = $Group
+    $WPFspGroupNames.Children.Add($checkbox)
+}
+
+# Populate Software Checkboxes
+foreach ($Software in $SoftwareList) {
+    $checkbox = New-Object Windows.Controls.CheckBox
+    $checkbox.Content = $Software.Name
+    $WPFspSoftware.Children.Add($checkbox)
+}
+
+# Event handler for Lookup button
+$WPFbtnLookup.Add_Click({
+    $userInfo = Get-ADUserInfo -UserName $WPFtxtUserName.Text
+    [System.Windows.MessageBox]::Show($userInfo, "User Info", "OK", "Information")
+})
+
+# Event handler for Add to Selected Groups button
+$WPFbtnAddGroups.Add_Click({
+    $selectedGroups = @()
+    foreach ($checkbox in $WPFspGroupNames.Children) {
+        if ($checkbox.IsChecked) {
+            $selectedGroups += $checkbox.Content
+        }
+    }
+    Add-ToDomainGroups -User $WPFtxtUserName.Text -Groups $selectedGroups
+})
+
+# Event handler for Install Selected Software button
+$WPFbtnInstallSoftware.Add_Click({
+    foreach ($checkbox in $WPFspSoftwareTitles.Children) {
+        if ($checkbox.IsChecked) {
+            $softwareItem = $SoftwareList | Where-Object { $_.Name -eq $checkbox.Content }
+            Install-Software -Name $softwareItem.Name -Installer $softwareItem.Installer -Arguments $softwareItem.Arguments
+        }
+    }
+})
+
 
 # Execution Flow
 if (-not $Unattended) {
-    Show-GUI
+    # Show the GUI
+    $Form.ShowDialog() | Out-Null
 } else {
     foreach ($Software in $SoftwareList) {
         Install-Software -Name $Software.Name -Installer $Software.Installer -Arguments $Software.Arguments
