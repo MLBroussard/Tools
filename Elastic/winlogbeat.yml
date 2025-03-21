@@ -1,0 +1,58 @@
+# Winlogbeat 8.17.3 Configuration File
+# Reference: https://www.elastic.co/guide/en/beats/winlogbeat/current/winlogbeat-reference-yml.html
+
+name: "winapps-winlogbeat"
+
+# Add tags to help find logs in Kibana
+#tags: ["Development", "Application-Server", "App-Name"]
+
+# Fields might be more granular than tags
+#fields_under_root: true
+
+# Define the event logs to monitor
+winlogbeat:
+  event_logs: # Limited to 22 conditions
+  # Reference: https://docs.microsoft.com/en-us/windows/win32/eventlog/event-logs
+    - name: Application
+      ignore_older: 72h
+    - name: Security
+    - name: System
+    # Find the log names with the following commands:
+    # Get-WinEvent -ListLog * | Format-List -Property LogName
+    # Get-EventLog * | Format-List -Property Log
+
+# Setup Kibana connection
+setup:
+  kibana:
+    host: "https://your-kibana-server:5601"
+    ssl:
+      enabled: true
+      certificate_authorities: ["C:\\Program Files\\Winlogbeat\\certs\\ca.crt"]
+      certificate: ["C:\\Program Files\\Winlogbeat\\certs\\client.crt"]
+      key: ["C:\\Program Files\\Winlogbeat\\certs\\client.key"]
+      verification_mode: full # full, strict, certificate, none
+    protocol: https
+
+# Configure Elasticsearch output
+output.elasticsearch:
+  hosts: ["https://your-elasticsearch-server:9200"]
+  api_key: "<api_id>:<api_key>"
+  ssl:
+    enabled: true
+    certificate_authorities: ["C:\\Program Files\\Winlogbeat\\certs\\ca.crt"]
+    certificate: ["C:\\Program Files\\Winlogbeat\\certs\\client.crt"]
+    key: ["C:\\Program Files\\Winlogbeat\\certs\\client.key"]
+    verification_mode: full # full, strict, certificate, none
+  protocol: https
+  index: "winlogbeat-%{[agent.version]}-%{+yyyy.MM.dd}"
+
+# Configure logging
+logging:
+  level: info
+  to_files: true
+  files:
+    path: "C:\\Program Files\\Winlogbeat\\logs"
+    name: winlogbeat
+    keepfiles: 7
+    # No way to set permissions for Windows...
+    #permissions: 0644 # Special: none, Owner: read/write, Group: read, Others: read
